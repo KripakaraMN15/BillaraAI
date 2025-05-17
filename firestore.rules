@@ -1,0 +1,121 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // -------------------------------------------------------------------------
+    // HELPERS
+    // -------------------------------------------------------------------------
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // -------------------------------------------------------------------------
+    // ENTITY VALIDATION
+    // -------------------------------------------------------------------------
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'email'])
+        && data.userId == request.auth.uid
+        && data.email is string && data.email.size() <= 256
+        && (data.get('businessName', '') is string && data.get('businessName', '').size() <= 256)
+        && (data.get('businessEmail', '') is string && data.get('businessEmail', '').size() <= 256)
+        && (data.get('businessPhone', '') is string && data.get('businessPhone', '').size() <= 32)
+        && (data.get('businessGST', '') is string && data.get('businessGST', '').size() <= 64)
+        && (data.get('logoUrl', '') is string && data.get('logoUrl', '').size() <= 3000000)
+        && (data.get('stampUrl', '') is string && data.get('stampUrl', '').size() <= 3000000)
+        && (data.get('signatureUrl', '') is string && data.get('signatureUrl', '').size() <= 3000000);
+    }
+
+    function isValidInvoice(data) {
+      return data.keys().hasAll(['id', 'userId', 'invoiceNumber', 'status'])
+        && data.userId == request.auth.uid
+        && data.invoiceNumber is string && data.invoiceNumber.size() <= 64
+        && data.status in ['Draft', 'Sent', 'Paid', 'Overdue']
+        && data.totalAmount is number && data.totalAmount >= 0
+        && data.items is list && data.items.size() <= 100;
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'email'])
+        && data.userId == request.auth.uid
+        && data.name is string && data.name.size() <= 256
+        && data.email is string && data.email.matches('^[^@]+@[^@]+\\.[^@]+$');
+    }
+
+    // -------------------------------------------------------------------------
+    // RULES
+    // -------------------------------------------------------------------------
+
+    // Global Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User Profile
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'logoUrl', 'stampUrl', 'signatureUrl', 
+          'businessName', 'businessAddress', 'businessEmail', 
+          'businessPhone', 'businessGST', 'updatedAt'
+        ]);
+    }
+
+    // Clients Subcollection
+    match /users/{userId}/clients/{clientId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(clientId) && isValidClient(incoming());
+      allow update: if isOwner(userId) && isValidClient(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'address', 'updatedAt']);
+      allow delete: if isOwner(userId);
+    }
+
+    // Invoices Subcollection
+    match /users/{userId}/invoices/{invoiceId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(invoiceId) && isValidInvoice(incoming());
+      allow update: if isOwner(userId) && isValidInvoice(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+            'clientName', 'clientEmail', 'clientAddress', 'clientId',
+            'invoiceNumber', 'issueDate', 'dueDate', 'paymentTerms', 'currency',
+            'items', 'taxPercent', 'discountPercent', 'subtotal',
+            'taxAmount', 'discountAmount', 'totalAmount',
+            'baseAmount', 'penaltyAmount', 'lastPenaltyUpdateAt', 'lastReminderSentAt',
+            'notes', 'status', 'public', 'updatedAt'
+          ]);
+      allow delete: if isOwner(userId);
+    }
+
+    // Public Read-only Access
+    match /publicInvoices/{invoiceId} {
+      allow get: if true; // Public read by ID
+      allow list: if false; // No directory listing
+      allow create: if isOwner(incoming().userId) && isValidId(invoiceId) && isValidInvoice(incoming());
+      allow update: if isOwner(existing().userId) && isValidInvoice(incoming())
+        && incoming().userId == existing().userId;
+      allow delete: if isOwner(existing().userId);
+    }
+  }
+}

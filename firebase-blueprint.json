@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Extended user information and business settings.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "logoUrl": { "type": "string", "description": "Base64 or external URL for business logo" },
+        "businessName": { "type": "string" },
+        "businessAddress": { "type": "string" },
+        "businessEmail": { "type": "string" },
+        "businessPhone": { "type": "string" },
+        "businessGST": { "type": "string" },
+        "stampUrl": { "type": "string", "description": "Base64 or external URL for business stamp" },
+        "signatureUrl": { "type": "string", "description": "Base64 or external URL for business signature" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Client contact information for invoicing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "email"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Invoice record with line items and status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientAddress": { "type": "string" },
+        "issueDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "paymentTerms": { "type": "string", "enum": ["Net 15", "Net 30", "Net 60", "Custom"] },
+        "currency": { "type": "string", "description": "Currency code (e.g. USD, EUR)" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unitPrice": { "type": "number" },
+              "total": { "type": "number" }
+            }
+          }
+        },
+        "taxPercent": { "type": "number" },
+        "discountPercent": { "type": "number" },
+        "subtotal": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "baseAmount": { "type": "number" },
+        "penaltyAmount": { "type": "number" },
+        "lastPenaltyUpdateAt": { "type": "string", "format": "date-time" },
+        "lastReminderSentAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["Draft", "Sent", "Paid", "Overdue"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "invoiceNumber", "status"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profile and settings."
+    },
+    "users/{userId}/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Address book for each user."
+    },
+    "users/{userId}/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Invoices belonging to a specific user."
+    },
+    "publicInvoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Read-only copy of invoices for public sharing."
+    }
+  }
+}
